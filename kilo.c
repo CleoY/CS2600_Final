@@ -21,6 +21,7 @@ char editorReadKey();
 void editorProcessKeypress();
 void editorRefreshScreen();
 void editorDrawRows();
+int getWindowSize(int *rows, int *cols);
 
 int main(void){
   enableRawMode();
