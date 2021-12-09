@@ -1,3 +1,10 @@
+#define _DEFAULT_SOURCE
+#define _BSD_SOURCE
+#define _GNU_SOURCE
+#define CTRL_KEY(k) ((k) & 0x1f)
+#define ABUF_INIT {NULL, 0}
+#define KILO_VERSION "0.0.1"
+
 #include <unistd.h>
 #include <termios.h>
 #include <stdlib.h>
@@ -7,10 +14,6 @@
 #include <sys/ioctl.h>
 #include <string.h>
 #include <sys/types.h>
-
-#define CTRL_KEY(k) ((k) & 0x1f)
-#define ABUF_INIT {NULL, 0}
-#define KILO_VERSION "0.0.1"
 
 enum editorKey {
   ARROW_LEFT = 1000,
@@ -66,7 +69,7 @@ void abAppend(struct abuf *ab, const char *s, int len);
 void abFree(struct abuf *ab);
 
 //FILE I/O
-void editorOpen();
+void editorOpen(char *filename);
 
 void initEditor() {
   E.cx = 0;
@@ -77,10 +80,12 @@ void initEditor() {
     die("getWindowSize");
 }
 
-int main(void){
+int main(int argc, char *argv[]) {
   enableRawMode();
   initEditor();
-  editorOpen();
+  if (argc >= 2) {
+    editorOpen(argv[1]);
+  }
 
   while (1) {
     editorRefreshScreen();
@@ -284,7 +289,7 @@ void editorDrawRows(struct abuf *ab) {
   int y;
   for (y = 0; y < E.screenrows; y++) {
     if (y >= E.numrows) {
-      if (y == E.screenrows / 3) {
+      if (E.numrows == 0 && y == E.screenrows / 3) {
         char welcome[80];
         int welcomelen = snprintf(welcome, sizeof(welcome),
           "Kilo editor -- version %s", KILO_VERSION);
@@ -327,12 +332,24 @@ void abFree(struct abuf *ab) {
 }
 
 //FILE I/O FUNCTIONS
-void editorOpen() {
-  char *line = "Hello, world!";
-  ssize_t linelen = 13;
-  E.row.size = linelen;
-  E.row.chars = malloc(linelen + 1);
-  memcpy(E.row.chars, line, linelen);
-  E.row.chars[linelen] = '\0';
-  E.numrows = 1;
+void editorOpen(char *filename) {
+  FILE *fp = fopen(filename, "r");
+  if (!fp) 
+    die("fopen");
+  char *line = NULL;
+  size_t linecap = 0;
+  ssize_t linelen;
+  linelen = getline(&line, &linecap, fp);
+  if (linelen != -1) {
+    while (linelen > 0 && (line[linelen - 1] == '\n' ||
+                           line[linelen - 1] == '\r'))
+      linelen--;
+    E.row.size = linelen;
+    E.row.chars = malloc(linelen + 1);
+    memcpy(E.row.chars, line, linelen);
+    E.row.chars[linelen] = '\0';
+    E.numrows = 1;
+  }
+  free(line);
+  fclose(fp);
 }
