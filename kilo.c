@@ -13,6 +13,7 @@
 
 struct termios orig_termios;
 struct editorConfig {
+  int cx, cy;
   int screenrows;
   int screencols;
   struct termios orig_termios;
@@ -23,20 +24,33 @@ struct abuf {
   int len;
 };
 
+void initEditor();
+
+//TERMINAL
 void enableRawMode();
 void disableRawMode();
 void die(const char *s);
 char editorReadKey();
+int getWindowSize(int *rows, int *cols);
+int getCursorPosition(int *rows, int *cols);
+
+//INPUT
 void editorProcessKeypress();
+void editorMoveCursor(char key);
+
+//OUTPUT
 void editorRefreshScreen();
 void editorDrawRows(struct abuf *ab);
-int getWindowSize(int *rows, int *cols);
-void initEditor();
-int getCursorPosition(int *rows, int *cols);
+
+//APPEND BUFFER
 void abAppend(struct abuf *ab, const char *s, int len);
 void abFree(struct abuf *ab);
 
+
 void initEditor() {
+  E.cx = 0;
+  E.cy = 0;
+
   if (getWindowSize(&E.screenrows, &E.screencols) == -1) 
     die("getWindowSize");
 }
@@ -125,7 +139,7 @@ int getCursorPosition(int *rows, int *cols) {
   return 0;
 }
 
-//INPUT FUNCTION
+//INPUT FUNCTIONS
 void editorProcessKeypress() {
   char c = editorReadKey();
   switch (c) {
@@ -133,6 +147,30 @@ void editorProcessKeypress() {
       write(STDOUT_FILENO, "\x1b[2J", 4);
       write(STDOUT_FILENO, "\x1b[H", 3);
       exit(0);
+      break;
+    
+    case 'w':
+    case 's':
+    case 'a':
+    case 'd':
+      editorMoveCursor(c);
+      break;
+  }
+}
+
+void editorMoveCursor(char key) {
+  switch (key) {
+    case 'a':
+      E.cx--;
+      break;
+    case 'd':
+      E.cx++;
+      break;
+    case 'w':
+      E.cy--;
+      break;
+    case 's':
+      E.cy++;
       break;
   }
 }
@@ -146,7 +184,10 @@ void editorRefreshScreen() {
 
   editorDrawRows(&ab);
   
-  abAppend(&ab, "\x1b[H", 3);
+  char buf[32];
+  snprintf(buf, sizeof(buf), "\x1b[%d;%dH", E.cy + 1, E.cx + 1);
+  abAppend(&ab, buf, strlen(buf));
+
   abAppend(&ab, "\x1b[?25h", 6);
 
   write(STDOUT_FILENO, ab.b, ab.len);
@@ -186,6 +227,7 @@ void abAppend(struct abuf *ab, const char *s, int len) {
   ab->b = new;
   ab->len += len;
 }
+
 void abFree(struct abuf *ab) {
   free(ab->b);
 }
