@@ -5,8 +5,10 @@
 #include <stdio.h>
 #include <errno.h>
 #include <sys/ioctl.h>
+#include <string.h>
 
 #define CTRL_KEY(k) ((k) & 0x1f)
+#define ABUF_INIT {NULL, 0}
 
 struct termios orig_termios;
 struct editorConfig {
@@ -15,6 +17,10 @@ struct editorConfig {
   struct termios orig_termios;
 };
 struct editorConfig E;
+struct abuf {
+  char *b;
+  int len;
+};
 
 void enableRawMode();
 void disableRawMode();
@@ -22,10 +28,12 @@ void die(const char *s);
 char editorReadKey();
 void editorProcessKeypress();
 void editorRefreshScreen();
-void editorDrawRows();
+void editorDrawRows(struct abuf *ab);
 int getWindowSize(int *rows, int *cols);
 void initEditor();
 int getCursorPosition(int *rows, int *cols);
+void abAppend(struct abuf *ab, const char *s, int len);
+void abFree(struct abuf *ab);
 
 void initEditor() {
   if (getWindowSize(&E.screenrows, &E.screencols) == -1) 
@@ -130,18 +138,39 @@ void editorProcessKeypress() {
 
 //OUTPUT FUNCTIONS
 void editorRefreshScreen() {
-  write(STDOUT_FILENO, "\x1b[2J", 4);
-  write(STDOUT_FILENO, "\x1b[H", 3);
-  editorDrawRows();
-  write(STDOUT_FILENO, "\x1b[H", 3);
+  struct abuf ab = ABUF_INIT;
+
+  abAppend(&ab, "\x1b[?25l", 6);
+  abAppend(&ab, "\x1b[2J", 4);
+  abAppend(&ab, "\x1b[H", 3);
+
+  editorDrawRows(&ab);
+  
+  abAppend(&ab, "\x1b[H", 3);
+  abAppend(&ab, "\x1b[?25h", 6);
+  
+  write(STDOUT_FILENO, ab.b, ab.len);
+  abFree(&ab);
 }
 
-void editorDrawRows() {
+void editorDrawRows(struct abuf *ab) {
   int y;
   for (y = 0; y < E.screenrows; y++) {
-    write(STDOUT_FILENO, "~", 1);
+    abAppend(ab, "~", 1);
     if (y < E.screenrows - 1) {
-      write(STDOUT_FILENO, "\r\n", 2);
+      abAppend(ab, "\r\n", 2);
     }
   }
+}
+
+//APPEND BUFFER FUNCTIONS
+void abAppend(struct abuf *ab, const char *s, int len) {
+  char *new = realloc(ab->b, ab->len + len);
+  if (new == NULL) return;
+  memcpy(&new[ab->len], s, len);
+  ab->b = new;
+  ab->len += len;
+}
+void abFree(struct abuf *ab) {
+  free(ab->b);
 }
