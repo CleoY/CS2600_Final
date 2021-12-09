@@ -1,7 +1,3 @@
-#define _DEFAULT_SOURCE
-#define _BSD_SOURCE
-#define _GNU_SOURCE
-
 #include <unistd.h>
 #include <termios.h>
 #include <stdlib.h>
@@ -70,7 +66,7 @@ void abAppend(struct abuf *ab, const char *s, int len);
 void abFree(struct abuf *ab);
 
 //FILE I/O
-void editorOpen(char *filename);
+void editorOpen();
 
 void initEditor() {
   E.cx = 0;
@@ -81,16 +77,16 @@ void initEditor() {
     die("getWindowSize");
 }
 
-int main(int argc, char *argv[]) {
+int main(void){
   enableRawMode();
   initEditor();
-  if (argc >= 2) {
-    editorOpen(argv[1]);
-  }
+  editorOpen();
+
   while (1) {
     editorRefreshScreen();
     editorProcessKeypress();
   }
+  
   return 0;
 }
 
@@ -317,7 +313,6 @@ void editorDrawRows(struct abuf *ab) {
   }
 }
 
-
 //APPEND BUFFER FUNCTIONS
 void abAppend(struct abuf *ab, const char *s, int len) {
   char *new = realloc(ab->b, ab->len + len);
@@ -331,26 +326,13 @@ void abFree(struct abuf *ab) {
   free(ab->b);
 }
 
-//FILE I/O FUNCTION
-void editorOpen(char *filename) {
-  FILE *fp = fopen(filename, "r");
-  if (!fp) 
-    die("fopen");
-  char *line = NULL;
-  size_t linecap = 0;
-  ssize_t linelen;
-
-  linelen = getline(&line, &linecap, fp);
-  if (linelen != -1) {
-    while (linelen > 0 && (line[linelen - 1] == '\n' ||
-                           line[linelen - 1] == '\r'))
-      linelen--;
-    E.row.size = linelen;
-    E.row.chars = malloc(linelen + 1);
-    memcpy(E.row.chars, line, linelen);
-    E.row.chars[linelen] = '\0';
-    E.numrows = 1;
-  }
-  free(line);
-  fclose(fp);
+//FILE I/O FUNCTIONS
+void editorOpen() {
+  char *line = "Hello, world!";
+  ssize_t linelen = 13;
+  E.row.size = linelen;
+  E.row.chars = malloc(linelen + 1);
+  memcpy(E.row.chars, line, linelen);
+  E.row.chars[linelen] = '\0';
+  E.numrows = 1;
 }
