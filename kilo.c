@@ -608,6 +608,6 @@ void editorSave() {
     }
     close(fd);
   }
-  free(buf);
+  free(buf); 
   editorSetStatusMessage("Can't save! I/O error: %s", strerror(errno));
 }
