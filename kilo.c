@@ -103,11 +103,15 @@ void editorRowDelChar(erow *row, int at);
 void editorFreeRow(erow *row);
 void editorDelRow(int at);
 void editorRowAppendString(erow *row, char *s, size_t len);
+int editorRowRxToCx(erow *row, int rx);
 
 //FILE I/O
 void editorOpen(char *filename);
 char *editorRowsToString(int *buflen);
 void editorSave();
+
+//SEARCH FUNCTIONS
+void editorFind();
 
 void initEditor() {
   E.cx = 0;
@@ -135,7 +139,8 @@ int main(int argc, char *argv[]) {
     editorOpen(argv[1]);
   }
 
-  editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-Q = quit");
+  editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find");
+
 
   while (1) {
     editorRefreshScreen();
@@ -288,6 +293,10 @@ void editorProcessKeypress() {
     case END_KEY:
       if (E.cy < E.numrows)
         E.cx = E.row[E.cy].size;
+      break;
+
+    case CTRL_KEY('f'):
+      editorFind();
       break;
 
     case BACKSPACE:
@@ -680,6 +689,18 @@ void editorRowAppendString(erow *row, char *s, size_t len) {
   E.dirty++;
 }
 
+int editorRowRxToCx(erow *row, int rx) {
+  int cur_rx = 0;
+  int cx;
+  for (cx = 0; cx < row->size; cx++) {
+    if (row->chars[cx] == '\t')
+      cur_rx += (KILO_TAB_STOP - 1) - (cur_rx % KILO_TAB_STOP);
+    cur_rx++;
+    if (cur_rx > rx) return cx;
+  }
+  return cx;
+}
+
 
 //FILE I/O FUNCTIONS
 void editorOpen(char *filename) {
@@ -692,7 +713,6 @@ void editorOpen(char *filename) {
   char *line = NULL;
   size_t linecap = 0;
   ssize_t linelen;
-  linelen = getline(&line, &linecap, fp);
   while ((linelen = getline(&line, &linecap, fp)) != -1) {
     while (linelen > 0 && (line[linelen - 1] == '\n' ||
                            line[linelen - 1] == '\r'))
@@ -750,4 +770,22 @@ void editorSave() {
   
   free(buf); 
   editorSetStatusMessage("Can't save! I/O error: %s", strerror(errno));
+}
+
+//SEARCH FUNCTIONS
+void editorFind() {
+  char *query = editorPrompt("Search: %s (ESC to cancel)");
+  if (query == NULL) return;
+  int i;
+  for (i = 0; i < E.numrows; i++) {
+    erow *row = &E.row[i];
+    char *match = strstr(row->render, query);
+    if (match) {
+      E.cy = i;
+      E.cx = editorRowRxToCx(row, match - row->render);
+      E.rowoff = E.numrows;
+      break;
+    }
+  }
+  free(query);
 }
