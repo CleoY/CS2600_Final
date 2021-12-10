@@ -6,6 +6,7 @@
 #define ABUF_INIT {NULL, 0}
 #define KILO_VERSION "0.0.1"
 #define KILO_TAB_STOP 8
+#define KILO_QUIT_TIMES 3
 
 #include <unistd.h>
 #include <termios.h>
@@ -85,6 +86,7 @@ void editorDrawMessageBar(struct abuf *ab);
 
 //EDITOR FUNCTIONS
 void editorInsertChar(int c);
+void editorDelChar();
 
 //APPEND BUFFER
 void abAppend(struct abuf *ab, const char *s, int len);
@@ -95,6 +97,7 @@ void editorAppendRow(char *s, size_t len);
 void editorUpdateRow(erow *row);
 int editorRowCxToRx(erow *row, int cx);
 void editorRowInsertChar(erow *row, int at, int c);
+void editorRowDelChar(erow *row, int at);
 
 //FILE I/O
 void editorOpen(char *filename);
@@ -249,6 +252,7 @@ int getCursorPosition(int *rows, int *cols) {
 
 //INPUT FUNCTIONS
 void editorProcessKeypress() {
+  static int quit_times = KILO_QUIT_TIMES;
   int c = editorReadKey();
 
   switch (c) {
@@ -257,6 +261,12 @@ void editorProcessKeypress() {
       break;
 
     case CTRL_KEY('q'):
+      if (E.dirty && quit_times > 0) {
+        editorSetStatusMessage("WARNING!!! File has unsaved changes. "
+          "Press Ctrl-Q %d more times to quit.", quit_times);
+        quit_times--;
+        return;
+      }
       write(STDOUT_FILENO, "\x1b[2J", 4);
       write(STDOUT_FILENO, "\x1b[H", 3);
       exit(0);
@@ -278,7 +288,9 @@ void editorProcessKeypress() {
     case BACKSPACE:
     case CTRL_KEY('h'):
     case DEL_KEY:
-      /* TODO */
+      if (c == DEL_KEY) 
+        editorMoveCursor(ARROW_RIGHT);
+      editorDelChar();
       break;
 
     case PAGE_UP:
@@ -311,6 +323,8 @@ void editorProcessKeypress() {
       editorInsertChar(c);
       break;
   }
+
+  quit_times = KILO_QUIT_TIMES;
 }
 
 void editorMoveCursor(int key) {
@@ -482,6 +496,15 @@ void editorInsertChar(int c) {
   E.cx++;
 }
 
+void editorDelChar() {
+  if (E.cy == E.numrows) return;
+  erow *row = &E.row[E.cy];
+  if (E.cx > 0) {
+    editorRowDelChar(row, E.cx - 1);
+    E.cx--;
+  }
+}
+
 
 //APPEND BUFFER FUNCTIONS
 void abAppend(struct abuf *ab, const char *s, int len) {
@@ -559,6 +582,14 @@ void editorRowInsertChar(erow *row, int at, int c) {
   row->size++;
   row->chars[at] = c;
   
+  editorUpdateRow(row);
+  E.dirty++;
+}
+
+void editorRowDelChar(erow *row, int at) {
+  if (at < 0 || at >= row->size) return;
+  memmove(&row->chars[at], &row->chars[at + 1], row->size - at);
+  row->size--;
   editorUpdateRow(row);
   E.dirty++;
 }
