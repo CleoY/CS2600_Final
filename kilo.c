@@ -20,6 +20,7 @@
 #include <stdarg.h>
 
 enum editorKey {
+  BACKSPACE = 127,
   ARROW_LEFT = 1000,
   ARROW_RIGHT,
   ARROW_UP,
@@ -80,6 +81,9 @@ void editorDrawStatusBar(struct abuf *ab);
 void editorSetStatusMessage(const char *fmt, ...);
 void editorDrawMessageBar(struct abuf *ab);
 
+//EDITOR FUNCTIONS
+void editorInsertChar(int c);
+
 //APPEND BUFFER
 void abAppend(struct abuf *ab, const char *s, int len);
 void abFree(struct abuf *ab);
@@ -88,6 +92,7 @@ void abFree(struct abuf *ab);
 void editorAppendRow(char *s, size_t len);
 void editorUpdateRow(erow *row);
 int editorRowCxToRx(erow *row, int cx);
+void editorRowInsertChar(erow *row, int at, int c);
 
 //FILE I/O
 void editorOpen(char *filename);
@@ -242,6 +247,10 @@ void editorProcessKeypress() {
   int c = editorReadKey();
 
   switch (c) {
+    case '\r':
+      /* TODO */
+      break;
+
     case CTRL_KEY('q'):
       write(STDOUT_FILENO, "\x1b[2J", 4);
       write(STDOUT_FILENO, "\x1b[H", 3);
@@ -251,9 +260,16 @@ void editorProcessKeypress() {
     case HOME_KEY:
       E.cx = 0;
       break;
+
     case END_KEY:
       if (E.cy < E.numrows)
         E.cx = E.row[E.cy].size;
+      break;
+
+    case BACKSPACE:
+    case CTRL_KEY('h'):
+    case DEL_KEY:
+      /* TODO */
       break;
 
     case PAGE_UP:
@@ -276,6 +292,14 @@ void editorProcessKeypress() {
     case ARROW_LEFT:
     case ARROW_RIGHT:
       editorMoveCursor(c);
+      break;
+
+    case CTRL_KEY('l'):
+    case '\x1b':
+      break;
+
+    default:
+      editorInsertChar(c);
       break;
   }
 }
@@ -439,6 +463,16 @@ void editorDrawMessageBar(struct abuf *ab) {
 }
 
 
+//EDITOR FUNCTIONS
+void editorInsertChar(int c) {
+  if (E.cy == E.numrows) {
+    editorAppendRow("", 0);
+  }
+  editorRowInsertChar(&E.row[E.cy], E.cx, c);
+  E.cx++;
+}
+
+
 //APPEND BUFFER FUNCTIONS
 void abAppend(struct abuf *ab, const char *s, int len) {
   char *new = realloc(ab->b, ab->len + len);
@@ -451,6 +485,7 @@ void abAppend(struct abuf *ab, const char *s, int len) {
 void abFree(struct abuf *ab) {
   free(ab->b);
 }
+
 
 //ROW FUNCTIONS
 void editorAppendRow(char *s, size_t len) {
@@ -499,6 +534,15 @@ int editorRowCxToRx(erow *row, int cx) {
     rx++;
   }
   return rx;
+}
+
+void editorRowInsertChar(erow *row, int at, int c) {
+  if (at < 0 || at > row->size) at = row->size;
+  row->chars = realloc(row->chars, row->size + 2);
+  memmove(&row->chars[at + 1], &row->chars[at], row->size - at + 1);
+  row->size++;
+  row->chars[at] = c;
+  editorUpdateRow(row);
 }
 
 
