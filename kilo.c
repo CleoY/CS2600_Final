@@ -49,6 +49,7 @@ struct editorConfig {
   int screencols;
   int numrows;
   erow *row;
+  int dirty;
   char *filename;
   char statusmsg[80];
   time_t statusmsg_time;
@@ -108,6 +109,7 @@ void initEditor() {
   E.coloff = 0;
   E.numrows = 0;
   E.row = NULL;
+  E.dirty = 0;
   E.filename = NULL;
   E.statusmsg[0] = '\0';
   E.statusmsg_time = 0;
@@ -432,8 +434,9 @@ void editorDrawStatusBar(struct abuf *ab) {
   abAppend(ab, "\x1b[7m", 4);
   char status[80], rstatus[80];
   
-  int len = snprintf(status, sizeof(status), "%.20s - %d lines",
-    E.filename ? E.filename : "[No Name]", E.numrows);
+  int len = snprintf(status, sizeof(status), "%.20s - %d lines %s",
+    E.filename ? E.filename : "[No Name]", E.numrows,
+    E.dirty ? "(modified)" : "");
   int rlen = snprintf(rstatus, sizeof(rstatus), "%d/%d",
     E.cy + 1, E.numrows);
   
@@ -498,14 +501,18 @@ void abFree(struct abuf *ab) {
 void editorAppendRow(char *s, size_t len) {
   E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1));
   int at = E.numrows;
+  
   E.row[at].size = len;
   E.row[at].chars = malloc(len + 1);
   memcpy(E.row[at].chars, s, len);
+  
   E.row[at].chars[len] = '\0';
   E.row[at].rsize = 0;
   E.row[at].render = NULL;
   editorUpdateRow(&E.row[at]);
+  
   E.numrows++;
+  E.dirty++;
 }
 
 void editorUpdateRow(erow *row) {
@@ -544,12 +551,16 @@ int editorRowCxToRx(erow *row, int cx) {
 }
 
 void editorRowInsertChar(erow *row, int at, int c) {
-  if (at < 0 || at > row->size) at = row->size;
+  if (at < 0 || at > row->size) 
+    at = row->size;
   row->chars = realloc(row->chars, row->size + 2);
   memmove(&row->chars[at + 1], &row->chars[at], row->size - at + 1);
+  
   row->size++;
   row->chars[at] = c;
+  
   editorUpdateRow(row);
+  E.dirty++;
 }
 
 
@@ -571,8 +582,10 @@ void editorOpen(char *filename) {
       linelen--;
     editorAppendRow(line, linelen);
   }
+  
   free(line);
   fclose(fp);
+  E.dirty = 0;
 }
 
 char *editorRowsToString(int *buflen) {
@@ -602,6 +615,7 @@ void editorSave() {
       if (write(fd, buf, len) == len) {
         close(fd);
         free(buf);
+        E.dirty = 0;
         editorSetStatusMessage("%d bytes written to disk", len);
         return;
       }
