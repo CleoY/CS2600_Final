@@ -259,7 +259,7 @@ void editorProcessKeypress() {
   static int quit_times = KILO_QUIT_TIMES;
   int c = editorReadKey();
 
-  switch (c) {
+  switch (c) { 
     case '\r':
       editorInsertNewline();
       break;
